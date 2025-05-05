@@ -3,27 +3,44 @@ import pyttsx3
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.prompts import PromptTemplate
 from langchain_ollama import OllamaLLM
+import os
+import contextlib
 
-llm = OllamaLLM(model="llama3.2")
+@contextlib.contextmanager
+def suppress_alsa_errors():
+    with open(os.devnull, 'w') as devnull:
+        old_stderr = os.dup(2)
+        os.dup2(devnull.fileno(), 2)
+        try:
+            yield
+        finally:
+            os.dup2(old_stderr, 2)
+
+llm = OllamaLLM(model="llama3.2") # you can use mistral, or any other model from the Ollama library
 
 chat_history = ChatMessageHistory()
 
 engine = pyttsx3.init()
 engine.setProperty('rate', 150) # Speed of speech
+voices = engine.getProperty('voices')
+engine.setProperty('voice', voices[1].id)
 
 recognizer = sr.Recognizer()
 
 def speak(text):
-    engine.say(text)
-    engine.runAndWait()
+    with suppress_alsa_errors():
+        engine.say(text)
+        engine.runAndWait()
 
 def listen():
-    with sr.Microphone() as source:
-        print("Listening...")
-        recognizer.adjust_for_ambient_noise(source)
-        audio = recognizer.listen(source)
+    with suppress_alsa_errors():
+        with sr.Microphone() as source:
+            print("Listening...")
+            recognizer.adjust_for_ambient_noise(source)
+            audio = recognizer.listen(source)
     try:
-        query = recognizer.recognize_google(audio)
+        with suppress_alsa_errors():
+            query = recognizer.recognize_google(audio)
         print(f"You said: {query}")
         return query.lower()
     except sr.UnknownValueError:
